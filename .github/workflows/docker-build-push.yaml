@@ -33,11 +33,17 @@ jobs:
       - name: Set up kubectl
         uses: azure/setup-kubectl@v3
 
-      - name: Configure K8s Context
-        uses: azure/k8s-set-context@v3
+      # *** NEW STEP: Create Kind cluster ***
+      - name: Create Kind cluster
+        uses: kubernetes-sigs/kind-action@v1
         with:
-          kubeconfig: ${{ secrets.KUBE_CONFIG }}
-          context: ${{ secrets.KUBE_CONTEXT }}
+          node_image: kindest/node:v1.28.0
+
+      # Optional: Verify Kind cluster context (for debugging)
+      - name: Verify Kind context
+        run: |
+          kubectl config get-contexts
+          kubectl cluster-info
 
       - name: Deploy to Kubernetes
         run: |
