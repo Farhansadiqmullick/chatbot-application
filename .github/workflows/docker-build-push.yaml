@@ -1,4 +1,4 @@
-name: Build, Push & Deploy
+name: Build, Push & Deploy with KinD
 
 on:
   push:
@@ -15,37 +15,36 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Docker Build & Push
-      - name: Login to DockerHub
-        uses: docker/login-action@v2
+      # 1. Set up KinD cluster
+      - name: Create KinD Cluster
+        uses: container-tools/kind-action@v1
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          name: github-actions-cluster  # Explicit cluster name
+          config: |
+            kind: Cluster
+            apiVersion: kind.x-k8s.io/v1alpha4
+            nodes:
+            - role: control-plane
+              extraPortMappings:
+              - containerPort: 3000
+                hostPort: 80  # Map host port 80 to container port 3000
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: ${{ env.DOCKER_IMAGE }}:latest
+      # 2. Build and push to local KinD registry
+      - name: Build Docker image
+        run: |
+          docker build -t ${DOCKER_IMAGE}:latest .
+          kind load docker-image ${DOCKER_IMAGE}:latest --name github-actions-cluster
 
-      # Kubernetes Deploy
+      # 3. Deploy to KinD
       - name: Set up kubectl
         uses: azure/setup-kubectl@v3
 
-      # *** NEW STEP: Create Kind cluster ***
-      - name: Create Kind cluster
-        uses: kubernetes-sigs/kind-action@v1
-        with:
-          node_image: kindest/node:v1.28.0
-
-      # Optional: Verify Kind cluster context (for debugging)
-      - name: Verify Kind context
+      - name: Verify cluster access
         run: |
-          kubectl config get-contexts
-          kubectl cluster-info
+          kubectl cluster-info --context kind-github-actions-cluster
+          kubectl get nodes
 
-      - name: Deploy to Kubernetes
+      - name: Deploy to KinD
         run: |
-          kubectl apply -f ${{ env.K8S_MANIFEST }}
+          kubectl apply -f ${K8S_MANIFEST} --context kind-github-actions-cluster
           kubectl rollout status deployment/chatbot-rolling --timeout=90s
