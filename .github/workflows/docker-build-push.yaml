@@ -1,63 +1,45 @@
-name: Build, Push Docker Image & Deploy
+name: Build, Push & Deploy
 
 on:
   push:
-    branches: [ main ]  # Trigger on pushes to main branch
+    branches: [ main ]
 
 env:
   DOCKER_IMAGE: farhanmullick/chatbot-application
   K8S_MANIFEST: .kubernetes/rolling-update-deployment.yaml
 
 jobs:
-  build-and-push:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up QEMU for multi-arch
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
+      # Docker Build & Push
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build & Push (multi-arch)
-        uses: docker/build-push-action@v5
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ${{ env.DOCKER_IMAGE }}:latest
-            ${{ env.DOCKER_IMAGE }}:${{ github.sha }}
-            
-  deploy-to-k8s:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+          tags: ${{ env.DOCKER_IMAGE }}:latest
 
-      - name: Install kubectl
+      # Kubernetes Deploy
+      - name: Set up kubectl
         uses: azure/setup-kubectl@v3
 
       - name: Configure K8s Context
-        run: |
-          # Decode kubeconfig and set context
-          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig.yaml
-          export KUBECONFIG=./kubeconfig.yaml
-          kubectl config use-context ${{ secrets.KUBE_CONTEXT }}
-          
-          # Verify connection
-          kubectl cluster-info
+        uses: azure/k8s-set-context@v3
+        with:
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+          context: ${{ secrets.KUBE_CONTEXT }}
 
-      - name: Trigger Rolling Update
+      - name: Deploy to Kubernetes
         run: |
-          kubectl set image deployment/chatbot-rolling \
-            chatbot=${{ env.DOCKER_IMAGE }}:${{ github.sha }}
+          kubectl apply -f ${{ env.K8S_MANIFEST }}
+          kubectl rollout status deployment/chatbot-rolling --timeout=90s
