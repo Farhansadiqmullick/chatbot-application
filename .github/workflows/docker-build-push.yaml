@@ -15,6 +15,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Kind Cluster
+        uses: helm/kind-action@v1.8.0
+
       # Docker Build & Push
       - name: Login to DockerHub
         uses: docker/login-action@v2
@@ -32,12 +35,6 @@ jobs:
       # Kubernetes Deploy
       - name: Set up kubectl
         uses: azure/setup-kubectl@v3
-
-      - name: Configure K8s Context
-        uses: azure/k8s-set-context@v3
-        with:
-          kubeconfig: ${{ secrets.KUBE_CONFIG }}
-          context: docker-desktop
 
       - name: Deploy to Kubernetes
         run: |
