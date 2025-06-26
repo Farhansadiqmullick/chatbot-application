@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: chatbot
-        image: farhanmullick/chatbot-application:latest
+        image: farhanmullick/chatbot-application:IMAGE_TAG
         ports:
         - containerPort: 3000
         readinessProbe:
