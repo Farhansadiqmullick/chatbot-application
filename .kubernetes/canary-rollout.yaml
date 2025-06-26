@@ -1,0 +1,47 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: chatbot-canary
+spec:
+  replicas: 4
+  strategy:
+    canary:
+      steps:
+      - setWeight: 25
+      - pause: {}  # Manual approval after 25% traffic
+      - setWeight: 50
+      - pause: {duration: 1m}  # Auto-progress after 1 minute
+      - setWeight: 75
+      - pause: {duration: 1m}
+      - setWeight: 100
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: chatbot
+  template:
+    metadata:
+      labels:
+        app: chatbot
+    spec:
+      containers:
+      - name: chatbot
+        image: farhanmullick/chatbot-application:v1  # Initial version
+        ports:
+        - containerPort: 3000
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chatbot-argocd-service
+spec:
+  ports:
+  - port: 80
+    targetPort: 3000
+  selector:
+    app: chatbot
