@@ -1,4 +1,4 @@
-name: Build, Push & Deploy with KinD
+name: Build, Push & Deploy
 
 on:
   push:
@@ -15,36 +15,31 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 1. Set up KinD cluster
-      - name: Create KinD Cluster
-        uses: container-tools/kind-action@v1
+      # Docker Build & Push
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
         with:
-          name: github-actions-cluster  # Explicit cluster name
-          config: |
-            kind: Cluster
-            apiVersion: kind.x-k8s.io/v1alpha4
-            nodes:
-            - role: control-plane
-              extraPortMappings:
-              - containerPort: 3000
-                hostPort: 80  # Map host port 80 to container port 3000
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 2. Build and push to local KinD registry
-      - name: Build Docker image
-        run: |
-          docker build -t ${DOCKER_IMAGE}:latest .
-          kind load docker-image ${DOCKER_IMAGE}:latest --name github-actions-cluster
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ env.DOCKER_IMAGE }}:latest
 
-      # 3. Deploy to KinD
+      # Kubernetes Deploy
       - name: Set up kubectl
         uses: azure/setup-kubectl@v3
 
-      - name: Verify cluster access
-        run: |
-          kubectl cluster-info --context kind-github-actions-cluster
-          kubectl get nodes
+      - name: Configure K8s Context
+        uses: azure/k8s-set-context@v3
+        with:
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+          context: ${{ secrets.KUBE_CONTEXT }}
 
-      - name: Deploy to KinD
+      - name: Deploy to Kubernetes
         run: |
-          kubectl apply -f ${K8S_MANIFEST} --context kind-github-actions-cluster
+          kubectl apply -f ${{ env.K8S_MANIFEST }}
           kubectl rollout status deployment/chatbot-rolling --timeout=90s
