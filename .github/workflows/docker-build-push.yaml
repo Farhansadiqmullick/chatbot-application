@@ -32,6 +32,7 @@ jobs:
           context: .
           push: true
           tags: ${{ env.DOCKER_IMAGE }}:${{ env.IMAGE_TAG }}
+          platforms: linux/arm64,linux/amd64
 
       # Kubernetes Deploy
       - name: Set up kubectl
